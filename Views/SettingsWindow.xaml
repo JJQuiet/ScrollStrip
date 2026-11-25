@@ -1,0 +1,114 @@
+<Window x:Class="ScrollStrip.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Icon="/ScrollStrip;component/Resources/tray.ico" Title="ScrollStrip 设置"
+        Width="410" Height="450" MinWidth="330" MinHeight="320"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="False" Language="zh-CN">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="WhenEnabled"/>
+        <Style TargetType="CheckBox">
+            <Setter Property="Margin" Value="0,4"/>
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Margin" Value="0,3,20,3"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="FontWeight" Value="Bold"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="Slider">
+            <Setter Property="IsSnapToTickEnabled" Value="True"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+        </Style>
+        <Style x:Key="ValueLabel" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,7,0,2"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,9" LastChildFill="False">
+            <CheckBox DockPanel.Dock="Left" Content="启用单指滚动" IsChecked="{Binding EdgeScrollEnabled}"/>
+            <CheckBox DockPanel.Dock="Right" Content="随 Windows 启动" IsChecked="{Binding RunAtStartup}"/>
+        </DockPanel>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <GroupBox Header="滚动模式" Padding="10,5,10,8">
+                    <StackPanel>
+                        <WrapPanel>
+                            <RadioButton Content="全触摸板" GroupName="ScrollMode" IsChecked="{Binding WholePad, Mode=TwoWay}"/>
+                            <RadioButton Content="仅边缘" GroupName="ScrollMode" IsChecked="{Binding EdgeOnly, Mode=TwoWay}"/>
+                        </WrapPanel>
+                        <StackPanel Margin="0,6,0,0" Visibility="{Binding WholePad, Converter={StaticResource WhenEnabled}}">
+                            <TextBlock Style="{StaticResource ValueLabel}"
+                                       Text="{Binding AngleDegrees, StringFormat='竖直偏角上限　{0}°'}"/>
+                            <Slider Minimum="5" Maximum="40" TickFrequency="1" Value="{Binding AngleDegrees}"
+                                    AutomationProperties.Name="允许偏离竖直方向的角度"/>
+                        </StackPanel>
+                        <StackPanel Margin="0,6,0,0" Visibility="{Binding EdgeOnly, Converter={StaticResource WhenEnabled}}">
+                            <WrapPanel>
+                                <CheckBox Content="左边缘" IsChecked="{Binding LeftEdgeEnabled}" Margin="0,4,14,4"/>
+                                <CheckBox Content="右边缘" IsChecked="{Binding RightEdgeEnabled}" Margin="0,4,14,4"/>
+                                <TextBlock VerticalAlignment="Center" Text="上下滑动，竖向滚动"/>
+                            </WrapPanel>
+                            <CheckBox Content="上边缘：左右滑动，竖向滚动" IsChecked="{Binding TopEdgeEnabled}"/>
+                            <CheckBox Content="下边缘：左右滑动，横向滚动" IsChecked="{Binding BottomEdgeEnabled}"/>
+                            <Expander Header="调整边缘参数" Margin="0,7,0,0">
+                                <StackPanel Margin="5,0,3,2">
+                                    <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding RightEdgeWidthPct, StringFormat='左右两侧各占宽度　{0}%'}"/>
+                                    <Slider Minimum="5" Maximum="30" TickFrequency="1" Value="{Binding RightEdgeWidthPct}" AutomationProperties.Name="左右边缘宽度"/>
+                                    <StackPanel Visibility="{Binding TopEdgeEnabled, Converter={StaticResource WhenEnabled}}">
+                                        <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding TopEdgeHeightPct, StringFormat='上边缘高度　{0}%'}"/>
+                                        <Slider Minimum="5" Maximum="30" TickFrequency="1" Value="{Binding TopEdgeHeightPct}" AutomationProperties.Name="上边缘高度"/>
+                                        <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding TopScrollSpeedMultiplier, StringFormat='上边缘滚动速度　{0:F1}×'}"/>
+                                        <Slider Minimum="0.5" Maximum="10" TickFrequency="0.1" Value="{Binding TopScrollSpeedMultiplier}" AutomationProperties.Name="上边缘滚动速度"/>
+                                        <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding TopJitterTolerancePct, StringFormat='上边缘防抖范围　{0:F2}%'}"/>
+                                        <Slider Minimum="0" Maximum="1" TickFrequency="0.05" Value="{Binding TopJitterTolerancePct}" AutomationProperties.Name="上边缘防抖范围"/>
+                                        <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding TopActivationDistancePct, StringFormat='上边缘触发距离　{0:F1}%'}"/>
+                                        <Slider Minimum="0" Maximum="3" TickFrequency="0.1" Value="{Binding TopActivationDistancePct}" AutomationProperties.Name="上边缘触发距离"/>
+                                    </StackPanel>
+                                    <StackPanel Visibility="{Binding BottomEdgeEnabled, Converter={StaticResource WhenEnabled}}">
+                                        <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding BottomEdgeHeightPct, StringFormat='下边缘高度　{0}%'}"/>
+                                        <Slider Minimum="5" Maximum="30" TickFrequency="1" Value="{Binding BottomEdgeHeightPct}" AutomationProperties.Name="下边缘高度"/>
+                                        <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding HorizontalScrollSpeedMultiplier, StringFormat='横向滚动速度　{0:F1}×'}"/>
+                                        <Slider Minimum="0.5" Maximum="5" TickFrequency="0.1" Value="{Binding HorizontalScrollSpeedMultiplier}" AutomationProperties.Name="横向滚动速度"/>
+                                        <CheckBox Content="反转横向滚动方向" IsChecked="{Binding InvertHorizontalScroll}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Expander>
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="通用设置" Margin="0,12,0,0" Padding="10,3,10,8">
+                    <StackPanel>
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource ValueLabel}">
+                                    <Setter Property="Text" Value="{Binding VerticalScrollSpeedMultiplier, StringFormat='竖向滚动速度　{0:F1}×'}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding WholePad}" Value="False">
+                                            <Setter Property="Text" Value="{Binding VerticalScrollSpeedMultiplier, StringFormat='左右边缘竖向速度　{0:F1}×'}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Slider Minimum="0.5" Maximum="5" TickFrequency="0.1" Value="{Binding VerticalScrollSpeedMultiplier}" AutomationProperties.Name="竖向滚动速度"/>
+                        <CheckBox Content="反转竖向滚动方向" IsChecked="{Binding InvertVerticalScroll}"/>
+                        <CheckBox Content="滚动时锁定光标" IsChecked="{Binding LockCursorDuringScroll}"/>
+                        <CheckBox Content="抬手后惯性滚动" IsChecked="{Binding InertiaEnabled}"/>
+                        <StackPanel Visibility="{Binding InertiaEnabled, Converter={StaticResource WhenEnabled}}">
+                            <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding InertiaStrength, StringFormat='惯性强度　{0}/10'}"/>
+                            <Slider Minimum="1" Maximum="10" TickFrequency="1" Value="{Binding InertiaStrength}" AutomationProperties.Name="惯性强度"/>
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
