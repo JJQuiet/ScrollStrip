@@ -24,6 +24,7 @@ internal static class NativeScrollBar
         public fixed uint States[6];
     }
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowStyle(IntPtr hwnd, int index);
     [DllImport("user32.dll")] private static extern bool GetScrollInfo(IntPtr hwnd, int bar, ref ScrollInfo info);
     [DllImport("user32.dll")] private static extern bool GetScrollBarInfo(IntPtr hwnd, int objectId, ref BarInfo info);
     [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
@@ -31,18 +32,25 @@ internal static class NativeScrollBar
     [DllImport("user32.dll")] private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
 
     // Consult only the hit HWND. Inheriting a frame's scrollbar would also activate its toolbar.
-    public static unsafe ScrollTarget? AtPoint(IntPtr window, System.Windows.Point point, bool vertical)
+    public static unsafe bool? CanScroll(IntPtr window, bool vertical)
     {
-        const uint rangeAndPage = 3; // SIF_RANGE | SIF_PAGE
-        var info = new ScrollInfo { Size = (uint)sizeof(ScrollInfo), Mask = rangeAndPage };
-        if (!GetScrollInfo(window, vertical ? 1 : 0, ref info) ||
-            (long)info.Maximum - info.Minimum < Math.Max(1L, (long)info.Page)) return null;
+        const int styleIndex = -16, verticalStyle = 0x00200000, horizontalStyle = 0x00100000;
+        if ((GetWindowStyle(window, styleIndex) & (vertical ? verticalStyle : horizontalStyle)) == 0)
+            return null;
 
         var bar = new BarInfo { Size = (uint)sizeof(BarInfo) };
-        const uint unavailableOrInvisible = 0x1 | 0x8000 | 0x10000;
-        if (!GetScrollBarInfo(window, vertical ? -5 : -6, ref bar) ||
-            (bar.States[0] & unavailableOrInvisible) != 0) return null;
+        if (!GetScrollBarInfo(window, vertical ? -5 : -6, ref bar)) return null;
 
+        const uint unavailableOrInvisible = 0x1 | 0x8000 | 0x10000;
+        if ((bar.States[0] & unavailableOrInvisible) != 0) return false;
+        const uint rangeAndPage = 3; // SIF_RANGE | SIF_PAGE
+        var info = new ScrollInfo { Size = (uint)sizeof(ScrollInfo), Mask = rangeAndPage };
+        if (!GetScrollInfo(window, vertical ? 1 : 0, ref info)) return null;
+        return (long)info.Maximum - info.Minimum >= Math.Max(1L, (long)info.Page);
+    }
+
+    public static ScrollTarget? ClientAtPoint(IntPtr window, System.Windows.Point point)
+    {
         // UI Automation uses physical screen pixels. Match them when mapping the client rectangle.
         var previous = SetThreadDpiAwarenessContext(new IntPtr(-4)); // per-monitor aware v2
         if (previous == IntPtr.Zero) return null;

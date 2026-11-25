@@ -25,39 +25,43 @@ internal sealed record ScrollTarget(IntPtr HitWindow, Rect Bounds)
         GetPhysicalCursorPos(out var point) && Bounds.Contains(point.X, point.Y)
         && WindowFromPhysicalPoint(point) == HitWindow;
 
-    public static Task<ScrollTarget?> Probe(bool vertical)
+    public static async Task<ScrollTarget?> Probe(bool vertical)
     {
-        if (!GetPhysicalCursorPos(out var point)) return Task.FromResult<ScrollTarget?>(null);
+        if (!GetPhysicalCursorPos(out var point)) return null;
         var hit = WindowFromPhysicalPoint(point);
         const uint gaRoot = 2;
         var root = GetAncestor(hit, gaRoot);
         var name = new StringBuilder(256);
         if (root == IntPtr.Zero || GetClassName(root, name, name.Capacity) == 0)
-            return Task.FromResult<ScrollTarget?>(null);
+            return null;
 
         var rootClass = name.ToString();
         if (rootClass is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "Progman" or "WorkerW")
-            return Task.FromResult<ScrollTarget?>(null);
+            return null;
 
-        // Third-party providers can stall. Never block raw input or queue more probes behind one.
-        if (Interlocked.CompareExchange(ref _probeBusy, 1, 0) != 0)
-            return Task.FromResult<ScrollTarget?>(null);
+        var position = new System.Windows.Point(point.X, point.Y);
+        var client = NativeScrollBar.ClientAtPoint(hit, position);
+        if (client == null) return null; // Includes window borders and non-client title bars.
 
-        long start = Stopwatch.GetTimestamp();
-        return Task.Run(() =>
+        // A stuck provider must not stall input or build an unbounded queue.
+        if (Interlocked.CompareExchange(ref _probeBusy, 1, 0) != 0) return client;
+        ScrollTarget? fallback = client;
+        var lookup = Task.Run(() =>
         {
             try
             {
-                var target = Find(point, hit, IsBrowser(root, rootClass), vertical);
-                return Stopwatch.GetElapsedTime(start).TotalMilliseconds <= 250 ? target : null;
+                var nativeScroll = NativeScrollBar.CanScroll(hit, vertical);
+                if (nativeScroll == false) Volatile.Write(ref fallback, null);
+                return Find(position, client, IsBrowser(root, rootClass), vertical, nativeScroll);
             }
-            catch (Exception ex) when (ex is SystemException)
+            catch (Exception ex) when (ex is SystemException or ElementNotAvailableException)
             {
-                // A disappearing window, protected process or unavailable provider is pointer-only.
-                return null;
+                return fallback;
             }
             finally { Volatile.Write(ref _probeBusy, 0); }
         });
+        try { return await lookup.WaitAsync(TimeSpan.FromMilliseconds(250)).ConfigureAwait(false); }
+        catch (TimeoutException) { return Volatile.Read(ref fallback); }
     }
 
     private static bool IsBrowser(IntPtr root, string rootClass)
@@ -70,14 +74,15 @@ internal sealed record ScrollTarget(IntPtr HitWindow, Rect Bounds)
             "chrome" or "msedge" or "brave" or "vivaldi" or "opera" or "chromium";
     }
 
-    private static ScrollTarget? Find(POINT point, IntPtr hit, bool browser, bool vertical)
+    private static ScrollTarget? Find(System.Windows.Point position, ScrollTarget client, bool browser, bool vertical, bool? nativeScroll)
     {
-        var position = new System.Windows.Point(point.X, point.Y);
         var element = AutomationElement.FromPoint(position);
         var walker = TreeWalker.RawViewWalker;
         var property = vertical ? ScrollPattern.VerticallyScrollableProperty
                                 : ScrollPattern.HorizontallyScrollableProperty;
         Rect bounds = Rect.Empty;
+        Rect fallbackBounds = client.Bounds;
+        bool reportsNoScroll = false, insideDocument = false, browserControl = false;
         for (int depth = 0; element != null && depth < 64; depth++, element = walker.GetParent(element))
         {
             var type = element.Current.ControlType;
@@ -86,23 +91,47 @@ internal sealed record ScrollTarget(IntPtr HitWindow, Rect Bounds)
                 type == ControlType.MenuBar || (type == ControlType.TabItem && bounds.IsEmpty))
                 return null;
 
-            if (bounds.IsEmpty && element.GetCurrentPropertyValue(property, true) is true)
+            if (depth == 0)
             {
-                var candidate = element.Current.BoundingRectangle;
-                if (candidate.Contains(position)) bounds = candidate;
+                var leaf = element.Current.BoundingRectangle;
+                if (leaf.Contains(position)) fallbackBounds.Intersect(leaf);
+            }
+            if (bounds.IsEmpty && element.GetCurrentPropertyValue(property, true) is bool canScroll)
+            {
+                if (canScroll)
+                {
+                    var candidate = element.Current.BoundingRectangle;
+                    if (candidate.Contains(position)) bounds = candidate;
+                }
+                else if (element.GetCurrentPropertyValue(AutomationElement.IsScrollPatternAvailableProperty) is true)
+                    reportsNoScroll = true;
             }
 
-            // Chromium and Firefox also expose scrollable tab strips and other browser UI.
-            // Only accept a scroll provider at or below the web document.
-            if (type == ControlType.Document && !bounds.IsEmpty)
+            if (type == ControlType.Document)
             {
-                bounds.Intersect(element.Current.BoundingRectangle);
-                return bounds.Contains(position) ? new ScrollTarget(hit, bounds) : null;
+                insideDocument = true;
+                if (!bounds.IsEmpty)
+                {
+                    bounds.Intersect(element.Current.BoundingRectangle);
+                    bounds.Intersect(client.Bounds);
+                    return bounds.Contains(position) ? new ScrollTarget(client.HitWindow, bounds) : null;
+                }
             }
+            // Browser navigation controls have no Document ancestor. A fully opaque
+            // client surface can be remote content, so it follows the unknown-area rule.
+            if (type == ControlType.Edit || type == ControlType.Button || type == ControlType.Tab ||
+                type == ControlType.MenuItem || type == ControlType.ComboBox)
+                browserControl = true;
             if (type == ControlType.Window) break;
         }
-        if (browser) return null;
-        if (!bounds.IsEmpty) return new ScrollTarget(hit, bounds);
-        return NativeScrollBar.AtPoint(hit, position, vertical);
+        if (browser && !insideDocument && browserControl) return null;
+        if (!bounds.IsEmpty && (!browser || insideDocument))
+        {
+            bounds.Intersect(client.Bounds);
+            return bounds.Contains(position) ? new ScrollTarget(client.HitWindow, bounds) : null;
+        }
+        if (nativeScroll == true) return client;
+        if (nativeScroll == false || reportsNoScroll) return null;
+        return new ScrollTarget(client.HitWindow, fallbackBounds);
     }
 }
