@@ -18,6 +18,9 @@ internal sealed record ScrollTarget(IntPtr HitWindow, Rect Bounds)
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetClassName(IntPtr window, StringBuilder name, int capacity);
 
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out int processId);
+
     public bool ContainsCursor() =>
         GetPhysicalCursorPos(out var point) && Bounds.Contains(point.X, point.Y)
         && WindowFromPhysicalPoint(point) == HitWindow;
@@ -40,14 +43,12 @@ internal sealed record ScrollTarget(IntPtr HitWindow, Rect Bounds)
         if (Interlocked.CompareExchange(ref _probeBusy, 1, 0) != 0)
             return Task.FromResult<ScrollTarget?>(null);
 
-        bool browser = rootClass.StartsWith("Chrome_WidgetWin_", StringComparison.Ordinal)
-            || rootClass == "MozillaWindowClass";
         long start = Stopwatch.GetTimestamp();
         return Task.Run(() =>
         {
             try
             {
-                var target = Find(point, hit, browser, vertical);
+                var target = Find(point, hit, IsBrowser(root, rootClass), vertical);
                 return Stopwatch.GetElapsedTime(start).TotalMilliseconds <= 250 ? target : null;
             }
             catch (Exception ex) when (ex is SystemException)
@@ -57,6 +58,16 @@ internal sealed record ScrollTarget(IntPtr HitWindow, Rect Bounds)
             }
             finally { Volatile.Write(ref _probeBusy, 0); }
         });
+    }
+
+    private static bool IsBrowser(IntPtr root, string rootClass)
+    {
+        if (rootClass == "MozillaWindowClass") return true;
+        if (!rootClass.StartsWith("Chrome_WidgetWin_", StringComparison.Ordinal)) return false;
+        GetWindowThreadProcessId(root, out int pid);
+        using var process = Process.GetProcessById(pid);
+        return process.ProcessName.ToLowerInvariant() is
+            "chrome" or "msedge" or "brave" or "vivaldi" or "opera" or "chromium";
     }
 
     private static ScrollTarget? Find(POINT point, IntPtr hit, bool browser, bool vertical)
@@ -70,6 +81,11 @@ internal sealed record ScrollTarget(IntPtr HitWindow, Rect Bounds)
         for (int depth = 0; element != null && depth < 64; depth++, element = walker.GetParent(element))
         {
             var type = element.Current.ControlType;
+            // Toolbars and headers can themselves contain scrolling controls.
+            if (type == ControlType.TitleBar || type == ControlType.ToolBar ||
+                type == ControlType.MenuBar || (type == ControlType.TabItem && bounds.IsEmpty))
+                return null;
+
             if (bounds.IsEmpty && element.GetCurrentPropertyValue(property, true) is true)
             {
                 var candidate = element.Current.BoundingRectangle;
@@ -83,12 +99,10 @@ internal sealed record ScrollTarget(IntPtr HitWindow, Rect Bounds)
                 bounds.Intersect(element.Current.BoundingRectangle);
                 return bounds.Contains(position) ? new ScrollTarget(hit, bounds) : null;
             }
-            if (type == ControlType.TitleBar || type == ControlType.ToolBar ||
-                type == ControlType.MenuBar || type == ControlType.TabItem)
-                return null;
-            if (!browser && !bounds.IsEmpty) return new ScrollTarget(hit, bounds);
             if (type == ControlType.Window) break;
         }
-        return null;
+        if (browser) return null;
+        if (!bounds.IsEmpty) return new ScrollTarget(hit, bounds);
+        return NativeScrollBar.AtPoint(hit, position, vertical);
     }
 }

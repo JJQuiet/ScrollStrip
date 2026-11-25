@@ -2,23 +2,24 @@ Unicode true
 RequestExecutionLevel user
 !include MUI2.nsh
 !include x64.nsh
+!include "LegacyRuntime.nsh"
 
 ; Build with NSIS 3 after dotnet publish ScrollStrip.csproj -c Release -o publish
 !ifndef PAYLOAD
   !define PAYLOAD "../publish"
 !endif
 !ifndef OUTPUT
-  !define OUTPUT "ScrollStrip-1.1.0-win-x64-Setup.exe"
+  !define OUTPUT "ScrollStrip-1.1.1-win-x64-Setup.exe"
 !endif
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\ScrollStrip.User"
-Name "ScrollStrip 1.1.0"
+Name "ScrollStrip 1.1.1"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\ScrollStrip"
 SetCompressor /SOLID lzma
-VIProductVersion "1.1.0.0"
+VIProductVersion "1.1.1.0"
 VIAddVersionKey "ProductName" "ScrollStrip"
-VIAddVersionKey "ProductVersion" "1.1.0"
-VIAddVersionKey "FileVersion" "1.1.0.0"
+VIAddVersionKey "ProductVersion" "1.1.1"
+VIAddVersionKey "FileVersion" "1.1.1.0"
 VIAddVersionKey "FileDescription" "ScrollStrip 安装程序"
 VIAddVersionKey "LegalCopyright" "ScrollStrip contributors"
 !define MUI_ICON "../Resources/tray.ico"
@@ -56,11 +57,20 @@ FunctionEnd
 
 Section
   SetOutPath "$INSTDIR\app"
-  File /r /x "*.pdb" "${PAYLOAD}/*"
+  File "${PAYLOAD}/ScrollStrip.exe"
+  File "${PAYLOAD}/ScrollStrip.dll"
+  File "${PAYLOAD}/ScrollStrip.deps.json"
+  File "${PAYLOAD}/ScrollStrip.runtimeconfig.json"
+  ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "DisplayVersion"
+  ReadRegStr $1 HKCU "${UNINSTALL_KEY}" "UninstallString"
+  ${If} $0 == "1.1.0"
+  ${AndIf} $1 == '"$INSTDIR\Uninstall.exe"'
+    !insertmacro RemoveLegacyRuntime
+  ${EndIf}
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\ScrollStrip.lnk" "$INSTDIR\app\ScrollStrip.exe" "--settings"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "ScrollStrip"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "1.1.0"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "1.1.1"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\app\ScrollStrip.exe"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
@@ -73,7 +83,11 @@ Section "Uninstall"
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ScrollStrip"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
   Delete "$SMPROGRAMS\ScrollStrip.lnk"
-  RMDir /r "$INSTDIR\app"
+  Delete "$INSTDIR\app\ScrollStrip.exe"
+  Delete "$INSTDIR\app\ScrollStrip.dll"
+  Delete "$INSTDIR\app\ScrollStrip.deps.json"
+  Delete "$INSTDIR\app\ScrollStrip.runtimeconfig.json"
+  RMDir "$INSTDIR\app"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
 SectionEnd
