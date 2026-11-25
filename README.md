@@ -25,6 +25,7 @@ Edge-scroll for Windows precision touchpads — swipe along the left, right, top
 - **Adjustable edge zones** — configure how wide/tall each trigger zone is (5–30 % of the touchpad)
 - **Per-axis speed multiplier** — independent speed control for vertical and horizontal
 - **Invert scroll direction** — per axis
+- **Scrollable targets only** (whole pad and edges) — checks the control under the pointer for scrolling on the output axis. The Windows taskbar and browser chrome stay usable for pointer movement. For traditional Win32 controls it also checks the visible standard scrollbar and its effective range. Unknown targets use pointer movement.
 - **Cursor lock** — optionally locks the pointer in place while scrolling so it doesn't drift
 - **Run at startup** — registers itself in `HKCU\...\Run` on request
 - **Lives in the system tray** — no taskbar entry, double-click or right-click → Settings to configure
@@ -37,7 +38,7 @@ Edge-scroll for Windows precision touchpads — swipe along the left, right, top
 |---|---|
 | OS | Windows 10 (1903+) or Windows 11 |
 | Touchpad | Any **precision touchpad** (HID Digitizer, Usage Page 0x0D / Usage 0x05) |
-| Runtime | [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) — only needed for the framework-dependent build |
+| Runtime | [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0)  (shared with other applications) |
 
 > **Check if your touchpad is a precision touchpad:** Settings → Bluetooth & devices → Touchpad. If you see "Your PC has a precision touchpad" it's supported.
 
@@ -56,20 +57,18 @@ ScrollStrip needs no installation and writes no registry keys except the optiona
 ### Build from source
 
 ```
-git clone https://github.com/tasos14/ScrollStrip.git
+git clone https://github.com/JJQuiet/ScrollStrip.git
 cd ScrollStrip
 dotnet run
 ```
 
-To publish this customized build with its runtime and WPF dependencies:
+To publish the x64 application files (requires the .NET 10 SDK):
 
 ```
 dotnet publish -c Release -o publish
 ```
 
-Run `publish\ScrollStrip.exe` and keep the whole publish folder together. This build
-keeps native WPF libraries beside the executable instead of extracting them to a
-temporary cache. `--settings` opens Settings. A second launch opens Settings in the
+Run `publish\ScrollStrip.exe` and keep the whole publish folder together. The installer and portable build both use the shared .NET 10 Windows Desktop Runtime. `--settings` opens Settings. A second launch opens Settings in the
 existing process, so only one instance scrolls at a time.
 
 ---
