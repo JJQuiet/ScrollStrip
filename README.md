@@ -25,6 +25,7 @@ Edge-scroll for Windows precision touchpads — swipe along the left, right, top
 - **Adjustable edge zones** — configure how wide/tall each trigger zone is (5–30 % of the touchpad)
 - **Per-axis speed multiplier** — independent speed control for vertical and horizontal
 - **Invert scroll direction** — per axis
+- **Scrollable targets only** (whole pad and edges) — checks the control under the pointer for scrolling on the output axis. The Windows taskbar and browser chrome stay usable for pointer movement. If a control does not report scrolling support, the gesture moves the pointer.
 - **Cursor lock** — optionally locks the pointer in place while scrolling so it doesn't drift
 - **Run at startup** — registers itself in `HKCU\...\Run` on request
 - **Lives in the system tray** — no taskbar entry, double-click or right-click → Settings to configure
@@ -56,7 +57,7 @@ ScrollStrip needs no installation and writes no registry keys except the optiona
 ### Build from source
 
 ```
-git clone https://github.com/tasos14/ScrollStrip.git
+git clone https://github.com/JJQuiet/ScrollStrip.git
 cd ScrollStrip
 dotnet run
 ```

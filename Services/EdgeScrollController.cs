@@ -14,6 +14,9 @@ public sealed class EdgeScrollController : IDisposable
     private bool _wholePadGesture;
     private bool _directionConfirmed;
     private bool _cursorLocked;
+    private Task<ScrollTarget?>? _targetProbe;
+    private ScrollTarget? _target;
+    private ScrollTarget? _inertiaTarget;
     private double _lastNormY;
     private double _lastNormX;
     private double _topMotionAnchorX;
@@ -118,12 +121,17 @@ public sealed class EdgeScrollController : IDisposable
         bool inBottomEdge = _settings.BottomEdgeEnabled && contact.NormY >= 1.0 - _settings.BottomEdgeHeightPct / 100.0;
 
         _wholePadGesture = _settings.WholePad;
-        if (!_wholePadGesture && !inLeftEdge && !inRightEdge && !inTopEdge && !inBottomEdge) return;
+        _trackedContactId = contact.ContactId;
+        if (!_wholePadGesture && !inLeftEdge && !inRightEdge && !inTopEdge && !inBottomEdge)
+        {
+            _state = State.Pointer;
+            return;
+        }
 
         _isVertical       = _wholePadGesture || inLeftEdge || inRightEdge || inTopEdge; // prefer vertical scrolling at bottom corners
         // Top edge takes priority at top corners and maps X movement to the vertical wheel.
         _usesHorizontalMotion = !_wholePadGesture && (inTopEdge || !_isVertical);
-        _trackedContactId = contact.ContactId;
+        _targetProbe = ScrollTarget.Probe(_isVertical);
         _lastNormY        = contact.NormY;
         _lastNormX        = contact.NormX;
         _topMotionAnchorX = contact.NormX;
@@ -160,6 +168,25 @@ public sealed class EdgeScrollController : IDisposable
 
         _lastNormY = contact.NormY;
         _lastNormX = contact.NormX;
+
+        if (_target == null)
+        {
+            // Discard motion while the provider is answering; do not replay it on approval.
+            if (_targetProbe == null || !_targetProbe.IsCompleted)
+            {
+                _topMotionAnchorX = contact.NormX;
+                return;
+            }
+            _target = _targetProbe.IsCompletedSuccessfully ? _targetProbe.Result : null;
+            _targetProbe = null;
+        }
+        if (_target == null || !_target.ContainsCursor())
+        {
+            if (_cursorLocked) UnlockCursor();
+            _cursorLocked = false;
+            _state = State.Pointer;
+            return;
+        }
 
         bool isTopGesture = _isVertical && _usesHorizontalMotion;
         if (isTopGesture)
@@ -245,65 +272,67 @@ public sealed class EdgeScrollController : IDisposable
 
         double launchVelocity = CalculateLaunchVelocity(Stopwatch.GetTimestamp());
 
-        if (wasScrolling && _settings.InertiaEnabled && Math.Abs(launchVelocity) >= InertiaStopThreshold)
-            BeginInertia(launchVelocity);
+        if (wasScrolling && _target != null && _settings.InertiaEnabled && Math.Abs(launchVelocity) >= InertiaStopThreshold)
+            BeginInertia(launchVelocity, _target);
         else
             lock (_inertiaLock) { _velocity = 0; _inertiaAccumulator = 0; }
+        _targetProbe = null;
+        _target = null;
     }
 
-    private void BeginInertia(double launchVelocity)
+    private void BeginInertia(double launchVelocity, ScrollTarget target)
     {
         _inertiaStartedAt = Stopwatch.GetTimestamp();
         lock (_inertiaLock)
         {
-            _velocity          = launchVelocity; // written before timer starts — write-before-start
+            _inertiaTimer?.Dispose();
+            _velocity = launchVelocity;
             _inertiaAccumulator = 0;
             _inertiaIsVertical = _isVertical;
+            _inertiaTarget = target;
+            _inertiaTimer = new System.Timers.Timer(16) { AutoReset = true };
+            _inertiaTimer.Elapsed += OnInertiaTimerElapsed;
+            _inertiaTimer.Start();
         }
-
-        _inertiaTimer?.Stop();
-        _inertiaTimer?.Dispose();
-        _inertiaTimer         = new System.Timers.Timer(16) { AutoReset = true };
-        _inertiaTimer.Elapsed += OnInertiaTimerElapsed;
-        _inertiaTimer.Start();
     }
 
     private void StopInertia()
     {
-        _inertiaTimer?.Stop();
-        _inertiaTimer?.Dispose();
-        _inertiaTimer = null;
-        lock (_inertiaLock) { _velocity = 0; _inertiaAccumulator = 0; }
+        lock (_inertiaLock)
+        {
+            _inertiaTimer?.Dispose();
+            _inertiaTimer = null;
+            _inertiaTarget = null;
+            _velocity = 0;
+            _inertiaAccumulator = 0;
+        }
         _velocityBuffer.Clear();
     }
 
     private void OnInertiaTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
     {
-        int amount;
-        bool isVertical;
-
         lock (_inertiaLock)
         {
+            if (sender != _inertiaTimer || _inertiaTimer == null) return;
             _velocity *= InertiaDecay;
-
-            if (Math.Abs(_velocity) < InertiaStopThreshold)
+            if (Math.Abs(_velocity) < InertiaStopThreshold || _inertiaTarget?.ContainsCursor() != true)
             {
                 _velocity = 0;
-                _inertiaTimer?.Stop();
+                _inertiaTimer.Dispose();
+                _inertiaTimer = null;
+                _inertiaTarget = null;
                 return;
             }
 
             _inertiaAccumulator += _velocity * InertiaTickScale;
-            amount = (int)_inertiaAccumulator;
+            int amount = (int)_inertiaAccumulator;
             if (amount == 0) return;
             _inertiaAccumulator -= amount;
 
-            isVertical = _inertiaIsVertical;
-            if (isVertical  && _settings.InvertVerticalScroll)   amount = -amount;
-            if (!isVertical && _settings.InvertHorizontalScroll) amount = -amount;
+            if (_inertiaIsVertical ? _settings.InvertVerticalScroll : _settings.InvertHorizontalScroll)
+                amount = -amount;
+            SendScrollEvent(amount, _inertiaIsVertical);
         }
-
-        SendScrollEvent(amount, isVertical);
     }
 
     private static void SendScrollEvent(int wheelAmount, bool vertical)
