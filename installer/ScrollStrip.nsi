@@ -9,17 +9,17 @@ RequestExecutionLevel user
   !define PAYLOAD "../publish"
 !endif
 !ifndef OUTPUT
-  !define OUTPUT "ScrollStrip-1.1.2-win-x64-Setup.exe"
+  !define OUTPUT "ScrollStrip-1.1.3-win-x64-Setup.exe"
 !endif
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\ScrollStrip.User"
-Name "ScrollStrip 1.1.2"
+Name "ScrollStrip 1.1.3"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\ScrollStrip"
 SetCompressor /SOLID lzma
-VIProductVersion "1.1.2.0"
+VIProductVersion "1.1.3.0"
 VIAddVersionKey "ProductName" "ScrollStrip"
-VIAddVersionKey "ProductVersion" "1.1.2"
-VIAddVersionKey "FileVersion" "1.1.2.0"
+VIAddVersionKey "ProductVersion" "1.1.3"
+VIAddVersionKey "FileVersion" "1.1.3.0"
 VIAddVersionKey "FileDescription" "ScrollStrip 安装程序"
 VIAddVersionKey "LegalCopyright" "ScrollStrip contributors"
 !define MUI_ICON "../Resources/tray.ico"
@@ -70,7 +70,7 @@ Section
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\ScrollStrip.lnk" "$INSTDIR\app\ScrollStrip.exe" "--settings"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "ScrollStrip"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "1.1.2"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "1.1.3"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\app\ScrollStrip.exe"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1

@@ -13,7 +13,9 @@ public class AppSettings : INotifyPropertyChanged
         "ScrollStrip", "settings.json");
 
     private bool _wholePad = true;
-    private int _angleDegrees = 20;
+    private int _angleDegrees = 35;
+    private int _pointerTopHeight = 88;
+    private int _pointerBottomHeight = 24;
     public bool WholePad
     {
         get => _wholePad;
@@ -31,7 +33,10 @@ public class AppSettings : INotifyPropertyChanged
         get => !WholePad;
         set { if (value) WholePad = false; }
     }
-    public int AngleDegrees { get => _angleDegrees; set => Set(ref _angleDegrees, Math.Clamp(value, 5, 40)); }
+    public int AngleDegrees { get => _angleDegrees; set => Set(ref _angleDegrees, Math.Clamp(value, 5, 60)); }
+
+    public int PointerTopHeight { get => _pointerTopHeight; set => Set(ref _pointerTopHeight, Math.Clamp(value, 0, 200)); }
+    public int PointerBottomHeight { get => _pointerBottomHeight; set => Set(ref _pointerBottomHeight, Math.Clamp(value, 0, 200)); }
 
     private bool _edgeScrollEnabled = true;
     private bool _leftEdgeEnabled = true;

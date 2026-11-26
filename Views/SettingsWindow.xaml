@@ -46,7 +46,7 @@
                         <StackPanel Margin="0,6,0,0" Visibility="{Binding WholePad, Converter={StaticResource WhenEnabled}}">
                             <TextBlock Style="{StaticResource ValueLabel}"
                                        Text="{Binding AngleDegrees, StringFormat='竖直偏角上限　{0}°'}"/>
-                            <Slider Minimum="5" Maximum="40" TickFrequency="1" Value="{Binding AngleDegrees}"
+                            <Slider Minimum="5" Maximum="60" TickFrequency="1" Value="{Binding AngleDegrees}"
                                     AutomationProperties.Name="允许偏离竖直方向的角度"/>
                         </StackPanel>
                         <StackPanel Margin="0,6,0,0" Visibility="{Binding EdgeOnly, Converter={StaticResource WhenEnabled}}">
@@ -83,6 +83,15 @@
                         </StackPanel>
                     </StackPanel>
                 </GroupBox>
+
+                <Expander Header="窗口内只移动光标的区域" Margin="0,10,0,0">
+                    <StackPanel Margin="10,0,8,0">
+                        <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding PointerTopHeight, StringFormat='窗口顶部　{0} 逻辑像素'}"/>
+                        <Slider Minimum="0" Maximum="200" TickFrequency="1" Value="{Binding PointerTopHeight}" AutomationProperties.Name="窗口顶部只移动光标的高度"/>
+                        <TextBlock Style="{StaticResource ValueLabel}" Text="{Binding PointerBottomHeight, StringFormat='窗口底部　{0} 逻辑像素'}"/>
+                        <Slider Minimum="0" Maximum="200" TickFrequency="1" Value="{Binding PointerBottomHeight}" AutomationProperties.Name="窗口底部只移动光标的高度"/>
+                    </StackPanel>
+                </Expander>
 
                 <GroupBox Header="通用设置" Margin="0,12,0,0" Padding="10,3,10,8">
                     <StackPanel>

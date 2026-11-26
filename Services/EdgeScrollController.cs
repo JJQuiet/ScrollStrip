@@ -14,7 +14,6 @@ public sealed class EdgeScrollController : IDisposable
     private bool _wholePadGesture;
     private bool _directionConfirmed;
     private bool _cursorLocked;
-    private Task<ScrollTarget?>? _targetProbe;
     private ScrollTarget? _target;
     private ScrollTarget? _inertiaTarget;
     private double _lastNormY;
@@ -131,7 +130,12 @@ public sealed class EdgeScrollController : IDisposable
         _isVertical       = _wholePadGesture || inLeftEdge || inRightEdge || inTopEdge; // prefer vertical scrolling at bottom corners
         // Top edge takes priority at top corners and maps X movement to the vertical wheel.
         _usesHorizontalMotion = !_wholePadGesture && (inTopEdge || !_isVertical);
-        _targetProbe = ScrollTarget.Probe(_isVertical);
+        _target = ScrollTarget.AtCursor(_settings.PointerTopHeight, _settings.PointerBottomHeight);
+        if (_target == null)
+        {
+            _state = State.Pointer;
+            return;
+        }
         _lastNormY        = contact.NormY;
         _lastNormX        = contact.NormX;
         _topMotionAnchorX = contact.NormX;
@@ -156,6 +160,8 @@ public sealed class EdgeScrollController : IDisposable
             if (Math.Max(along, across) < (_wholePadGesture ? 0.01 : 0.002)) return;
             if (_wholePadGesture ? across > along * Math.Tan(_settings.AngleDegrees * Math.PI / 180) : along <= across * 1.2)
             {
+                // Measure from touchdown: allow a small lateral start to turn into a vertical swipe.
+                if (_wholePadGesture && Math.Max(along, across) < 0.04) return;
                 _state = State.Pointer;
                 return;
             }
@@ -169,17 +175,6 @@ public sealed class EdgeScrollController : IDisposable
         _lastNormY = contact.NormY;
         _lastNormX = contact.NormX;
 
-        if (_target == null)
-        {
-            // Discard motion while the provider is answering; do not replay it on approval.
-            if (_targetProbe == null || !_targetProbe.IsCompleted)
-            {
-                _topMotionAnchorX = contact.NormX;
-                return;
-            }
-            _target = _targetProbe.IsCompletedSuccessfully ? _targetProbe.Result : null;
-            _targetProbe = null;
-        }
         if (_target == null || !_target.ContainsCursor())
         {
             if (_cursorLocked) UnlockCursor();
@@ -276,7 +271,6 @@ public sealed class EdgeScrollController : IDisposable
             BeginInertia(launchVelocity, _target);
         else
             lock (_inertiaLock) { _velocity = 0; _inertiaAccumulator = 0; }
-        _targetProbe = null;
         _target = null;
     }
 
